@@ -41,3 +41,52 @@
 - Waiting period of 30 days applies for new policies
 - Pre-existing conditions have a 2-year exclusion period (⚠️ conflicts with BR-10 which states 90 days — needs clarification)
 - Agent can submit claims on behalf of a policyholder
+
+---
+
+## QA Pipeline Results
+
+**Pipeline run:** 2026-06-06 | **Status:** ✅ Complete
+
+### 🔍 Review Story
+
+| Check | Result |
+|-------|--------|
+| ACs clear? | ⚠️ Partial — AC-1 file size/format conflicts with business rules; AC-3 "documents complete" undefined |
+| Ambiguities | 7 found — file size conflict, PNG omission, "documents complete" undefined, 24hr SLA scope, pre-existing exclusion contradiction, duplicate definition absent, SMS mandatory vs. optional |
+| Missing ACs | 6 identified — waiting period, pre-existing exclusion, lapsed policy, 90-day window, agent submission constraints, claim status tracking |
+| Testability | ⚠️ Issues — AC-3 auto-approval trigger not measurable; AC-4 SLA not auditable without timestamps; AC-6 duplicate logic undefined |
+
+📄 [View Execution Summary](outputs/US-004_execution_summary.md)
+
+---
+
+### ⚠️ Analyze Risk
+
+| Dimension | Score |
+|-----------|-------|
+| Business Logic | 9 / 10 |
+| Security | 8 / 10 |
+| Integration | 8 / 10 |
+| Data Integrity | 8 / 10 |
+| User Experience | 6 / 10 |
+| Performance | 6 / 10 |
+| **Overall** | **8 / 10 — 🔴 High** |
+
+**Top risks:** Auto-approval threshold logic, file upload attack surface, coverage limit race conditions, pre-existing condition rule conflict, agent impersonation, notification reliability
+
+📄 [View Risk Analysis](outputs/US-004_risk_analysis.md)
+
+---
+
+### ✅ Generate Test Cases
+
+| Category | Count |
+|----------|-------|
+| Functional | 6 |
+| Negative | 8 |
+| Boundary | 7 |
+| Integration | 5 |
+| **Total** | **26** |
+
+📄 [View Test Cases](outputs/US-004_test_cases.md)

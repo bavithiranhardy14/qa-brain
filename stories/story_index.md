@@ -1,6 +1,6 @@
 # Story Index
 
-> **Next Story ID: US-004**
+> **Next Story ID: US-005**
 > *(Increment this after each new story is added)*
 
 ---
@@ -35,6 +35,7 @@ Paste your story into chat and run `/new-story` — everything below happens aut
 | US-001 | Customer Registration | Sprint 1 | 🔲 Not Started | [US-001_customer_registration.md](US-001_customer_registration.md) | — |
 | US-002 | Submit a Claim | Sprint 1 | 🔲 Not Started | [US-002_submit_claim.md](US-002_submit_claim.md) | — |
 | US-003 | Password Reset | Sprint 1 | ✅ Complete | [US-003_password_reset.md](US-003_password_reset.md) | [Tests](outputs/US-003_test_cases.md) · [Risk](outputs/US-003_risk_analysis.md) · [Summary](outputs/US-003_execution_summary.md) |
+| US-004 | Submit Insurance Claim | Sprint 2 | ✅ Complete | [US-004_submit_insurance_claim.md](US-004_submit_insurance_claim.md) | [Tests](outputs/US-004_test_cases.md) · [Risk](outputs/US-004_risk_analysis.md) · [Summary](outputs/US-004_execution_summary.md) |
 
 ---
 
