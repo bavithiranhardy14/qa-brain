@@ -122,7 +122,61 @@ Create the following files with the content just generated:
 - `stories/outputs/US-NNN_risk_analysis.md` ← copy of outputs/risk_analysis.md
 - `stories/outputs/US-NNN_test_cases.md` ← copy of outputs/generated_test_cases.md
 
-### Step 10: Update story_index.md to Complete
+### Step 10: Write QA Pipeline Results into the Story File
+Append a `## QA Pipeline Results` section to `stories/US-NNN_title.md` with the following structure:
+
+```markdown
+---
+
+## QA Pipeline Results
+
+**Pipeline run:** [today's date] | **Status:** ✅ Complete
+
+### 🔍 Review Story
+
+| Check | Result |
+|-------|--------|
+| ACs clear? | [result] |
+| Ambiguities | [count + summary] |
+| Missing ACs | [count + list] |
+| Testability | [result] |
+
+📄 [View Execution Summary](outputs/US-NNN_execution_summary.md)
+
+---
+
+### ⚠️ Analyze Risk
+
+| Dimension | Score |
+|-----------|-------|
+| Security | X / 10 |
+| Business Logic | X / 10 |
+| Integration | X / 10 |
+| Data Integrity | X / 10 |
+| User Experience | X / 10 |
+| Performance | X / 10 |
+| **Overall** | **X / 10 — [🔴 High / 🟡 Medium / 🟢 Low]** |
+
+**Top risks:** [brief list]
+
+📄 [View Risk Analysis](outputs/US-NNN_risk_analysis.md)
+
+---
+
+### ✅ Generate Test Cases
+
+| Category | Count |
+|----------|-------|
+| Functional | N |
+| Negative | N |
+| Boundary | N |
+| Integration | N |
+| **Total** | **N** |
+
+📄 [View Test Cases](outputs/US-NNN_test_cases.md)
+```
+
+### Step 11: Update story_index.md to Complete
 Update the row added in Step 4:
 - Change status from 🔄 In Progress → ✅ Complete
 - Add links to the three output files in the Outputs column:

@@ -50,3 +50,52 @@
 
 - Password policy: min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special character
 - Account lockout triggered after 5 consecutive failed login attempts
+
+---
+
+## QA Pipeline Results
+
+**Pipeline run:** 2026-06-06 | **Status:** ✅ Complete
+
+### 🔍 Review Story
+
+| Check | Result |
+|-------|--------|
+| ACs clear? | ⚠️ Partial — AC-4 ambiguous |
+| Ambiguities | 1 found — "reset completed" undefined |
+| Missing ACs | 5 identified (unregistered email, rate limit, complexity, success notification, link invalidation) |
+| Testability | ⚠️ Minor — password history storage must be confirmed |
+
+📄 [View Execution Summary](outputs/US-003_execution_summary.md)
+
+---
+
+### ⚠️ Analyze Risk
+
+| Dimension | Score |
+|-----------|-------|
+| Security | 9 / 10 |
+| Business Logic | 8 / 10 |
+| Integration | 7 / 10 |
+| Data Integrity | 6 / 10 |
+| User Experience | 6 / 10 |
+| Performance | 3 / 10 |
+| **Overall** | **7 / 10 — 🔴 High** |
+
+**Top risks:** Token reuse, email enumeration, lockout-reset state, no rate limiting
+
+📄 [View Risk Analysis](outputs/US-003_risk_analysis.md)
+
+---
+
+### ✅ Generate Test Cases
+
+| Category | Count |
+|----------|-------|
+| Functional | 6 |
+| Negative | 7 |
+| Boundary | 6 |
+| Integration | 5 |
+| **Total** | **24** |
+
+📄 [View Test Cases](outputs/US-003_test_cases.md)
