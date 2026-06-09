@@ -1,10 +1,55 @@
-# OS
+# ── OS ─────────────────────────────────────────────────────────────────────
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
+desktop.ini
 
-# VS Code
+# ── IDE ─────────────────────────────────────────────────────────────────────
 .vscode/settings.json
 .vscode/launch.json
+.idea/
+*.suo
+*.user
 
-# Keep skills and prompts
-!.github/
+# ── Environment & secrets ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Node / package managers ──────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun.lockb
+
+# ── Build / dist ─────────────────────────────────────────────────────────────
+dist/
+build/
+out/
+*.js.map
+
+# ── Logs & temp ──────────────────────────────────────────────────────────────
+*.log
+*.tmp
+*.temp
+.cache/
+
+# ── Generated QA outputs (scan results, story outputs) ───────────────────────
+# These are produced by skills at runtime and are not source files.
+stories/outputs/product_scan/
+stories/outputs/*/
+
+# Keep the outputs folder README (documents what the folder is for)
+!stories/outputs/README.md
+
+# ── Current working story (transient, overwritten each session) ──────────────
+stories/current_story.md
+
+# ── Always keep source ───────────────────────────────────────────────────────
+# knowledge/, prompts/, .github/skills/, stories/story_index.md, README.md
+# are never ignored — they are the committed source of truth.
+

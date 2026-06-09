@@ -1,13 +1,11 @@
 # Product Context
 
 ## Application Overview
+**Application Name:** RewardRally
+**Type:** AI-Powered Shopify Marketing Automation — REST API (Azure Functions) + React Web App
+**Primary Users:** Shopify store administrators and marketers
 
-**Application Name:** Insurance Portal
-**Version:** 1.0
-**Type:** Web App + REST API
-**Primary Users:** Customers, Insurance Agents, Underwriters, Claims Handlers, Administrators
-
-The Insurance Portal is a Health Insurance management platform that allows customers to purchase and manage health insurance policies, submit and track medical claims, renew existing coverage, and manage their documents online. Insurance agents can manage their customer portfolio. Underwriters review and approve policy applications. Claims handlers process and settle submitted claims. Administrators manage users, products, and system configuration.
+RewardRally connects to Shopify stores and runs four independent AI pipelines that identify customers at risk of churning, personalize outreach based on behavioral signals, optimize loyalty rewards using cost-aware bandit algorithms, and nudge customers to replenish products on predicted purchase cycles. All pipelines communicate with customers via WhatsApp or Email and learn from real conversion outcomes.
 
 ---
 
@@ -15,98 +13,91 @@ The Insurance Portal is a Health Insurance management platform that allows custo
 
 | Module | Description | Primary Roles |
 |--------|-------------|---------------|
-| **Authentication & Access** | Registration, login, MFA, password reset, role-based access control | All Users |
-| **Policy Management** | Browse plans, get quotes, purchase policies, view active/expired policies | Customer, Agent |
-| **Claims Management** | Submit claims, upload supporting documents, track claim status, approve/reject claims | Customer, Claims Handler |
-| **Renewals** | View upcoming expirations, initiate renewal, pay renewal premium | Customer, Agent |
-| **Payments** | Premium payments, renewal payments, payment history, receipts | Customer |
-| **Document Management** | Upload, view, and download policy documents, claim documents, identity proofs | Customer, Agent, Claims Handler |
-| **Agent Dashboard** | View assigned customers, policy portfolio, pending actions | Agent |
-| **Underwriting** | Review new policy applications, assess risk, approve or decline policies | Underwriter |
-| **Notifications** | Email and in-portal alerts for policy status, claim updates, renewal reminders | All Users |
-| **Admin Panel** | Manage users, insurance products, coverage tiers, system settings, audit logs | Administrator |
-| **Reporting** | Generate reports on policies, claims, renewals, agent performance | Administrator, Underwriter |
+| Churn Prediction Pipeline | Fetches Shopify data, scores customers via RFM + logistic regression, filters by CLV, then selects outreach actions (discount/reminder/win-back/no-action) via UCB bandit | Store Admin |
+| Hyper-Personalization Pipeline | Builds behavioral feature profiles from Cosmos DB browse/cart signals, classifies customer intent (exploring/hesitating/ready/dropping), routes targeted WhatsApp nudges via MAB | Store Admin |
+| Reward Optimization Pipeline | Computes necessity score (0–1) per customer, gates eligible reward tiers by band, selects cost-aware reward (no_reward / points_reward / discount_10 / discount_20) via UCB bandit | Store Admin |
+| Lifecycle Replenishment Pipeline | Estimates per-customer replenishment cycle from order gaps, classifies state (not_due / nearing / overdue), selects nudge action (no_action / reminder / suggest_next / bundle_offer) via UCB bandit | Store Admin |
+| Campaign Scheduler | HTTP CRUD for scheduling pipeline runs on cron; distributed lease prevents double-execution across Azure Function instances | Store Admin |
+| Campaign Runner | Timer-triggered (every 60s) — queries due campaigns, acquires distributed lease, routes to correct pipeline via SkillRegistry | System (internal) |
+| Campaign Reporting & Status | Aggregates per-campaign analytics: delivery rates, conversion rates, bandit learning state, run history | Store Admin |
+| Chat / AI Assistant | Azure OpenAI-backed conversational interface — parses natural-language intent (29 intent types), routes to the correct agent or falls through to general chat | Store Admin |
+| Multi-Tenant Client Management | CRUD for merchant accounts; encrypts Shopify/WhatsApp/Email credentials at rest; all pipelines isolated per clientId | System Admin |
+| Conversion Tracking | Records WhatsApp/Email sends, resolves purchase outcomes from Shopify orders, feeds real rewards back to UCB bandits at next run | System (internal) |
+| Outreach Dispatch | Routes pipeline decisions to WhatsApp (Meta Cloud API) or Email (MSG91) based on campaign channel setting | System (internal) |
+| Authentication | Keycloak JWT validation on all HTTP endpoints; dev mode falls back to `sub: 'dev'` when Keycloak not configured | System (internal) |
 
 ---
 
 ## User Workflows
 
-### Workflow 1: Customer Purchases a New Policy
-1. Customer registers or logs in to the portal
-2. Customer browses available health insurance plans
-3. Customer selects a plan and fills in the proposal form (personal details, coverage requirements)
-4. System calculates the premium based on age, coverage type, and add-ons
-5. Customer reviews the quote and proceeds to payment
-6. Payment is processed and confirmed
-7. Application is sent to Underwriting for review
-8. Underwriter approves or declines the policy
-9. If approved, the policy is activated and a policy document is generated
-10. Customer receives notification with policy number and document link
+### Workflow 1: Schedule a Churn Recovery Campaign
+1. User opens React chat UI (authenticated via Keycloak)
+2. User types a natural-language command (e.g., "create a churn campaign for my store")
+3. UI pre-classifier checks for slash commands or keyword matches; on miss, LLM parses intent
+4. Intent resolved to `RUN_CHURN_ANALYSIS` with confidence ≥ 0.70
+5. UI renders `AgentInputCard` — user fills: name, cron schedule, dryRun flag, maxAttempts, minGapDays, churnWindowDays
+6. UI POSTs `/api/campaigns/schedule` with `parameters.pipelineType = 'churn'` and `clientId`
+7. API creates `CampaignSchedule` document in MongoDB with computed `nextRunAt`
+8. Campaign runner timer (every 60s) picks up the campaign when `nextRunAt <= now`
+9. Runner acquires distributed MongoDB lease and calls `SkillRegistry.get('churn').execute(ctx)`
+10. Churn pipeline: fetches Shopify customers + orders → RFM scores → churn prediction → CLV filter → UCB bandit selects action per customer → WhatsApp messages sent → attempt counters incremented → run log persisted
 
-### Workflow 2: Customer Submits a Claim
-1. Customer logs in and navigates to Claims
-2. Customer selects the active policy and clicks "Submit Claim"
-3. Customer fills in the claim form (date of treatment, hospital, diagnosis, claim amount)
-4. Customer uploads supporting documents (bills, prescriptions, discharge summary)
-5. Claim is submitted and assigned a Claim Reference Number
-6. Claims Handler reviews the submission, validates documents, and checks policy coverage
-7. Claims Handler approves or rejects the claim with a reason
-8. If approved, the settlement amount is calculated and payment initiated
-9. Customer is notified of the outcome and settlement details
+### Workflow 2: Outcome Resolution and Bandit Learning
+1. Customer receives WhatsApp message; `whatsapp_conversion_tracking` record written (outcome_pending: true)
+2. At the START of the next pipeline run, the system fetches fresh Shopify orders
+3. For each pending tracking record: if customer placed an order AFTER message send time → `converted: true`, `real_reward: 1`; else `converted: false`, `real_reward: 0`
+4. Converted customers receive `suppressed: true` flag; suppressed customers are excluded from future outreach
+5. Real rewards (0 or 1) are fed into the UCB bandit state (Azure Blob) — bandit updates arm averages
+6. On next run, bandit selects actions informed by real conversion data
 
-### Workflow 3: Customer Renews a Policy
-1. Customer receives a renewal reminder 30 days before expiry
-2. Customer logs in and views the renewal offer on the dashboard
-3. Customer reviews updated premium and coverage terms
-4. Customer confirms renewal and proceeds to payment
-5. Payment is processed and the policy period is extended
-6. Updated policy document is generated and sent to the customer
+### Workflow 3: Monitor Campaign Analytics
+1. User asks "show analytics for my churn campaign" in chat
+2. Intent parsed as `GET_CAMPAIGN_ANALYTICS`; agent `campaign-analytics` executes
+3. UI calls `/api/campaigns/{campaignId}/status?clientId=...`
+4. API aggregates: customer breakdown by churn risk / intent state / necessity band, action distribution, conversion rate, delivery success rate, bandit arm rewards, last 5 run summaries
+5. UI renders `AgentResponseCard` with structured analytics data
 
-### Workflow 4: Agent Manages Customer Portfolio
-1. Agent logs in to the Agent Dashboard
-2. Agent views list of assigned customers and their policy statuses
-3. Agent can initiate policy purchase or renewal on behalf of a customer
-4. Agent views commission earned and pending actions
+### Workflow 4: Pause, Resume, or Stop a Campaign
+1. User types "pause my churn campaign" in chat
+2. Intent parsed as `PAUSE_CAMPAIGN`; agent `campaign-pause` executes
+3. If campaign name is ambiguous, UI asks clarification (fuzzy match score threshold: 0.4)
+4. User confirms campaign; UI sends PATCH `/api/campaigns/{campaignId}` with `status: 'paused'`
+5. Campaign runner skips paused campaigns on next timer fire
+6. User can resume via "resume campaign" → status set to `active`, `nextRunAt` recalculated from current time
 
-### Workflow 5: Administrator Manages Users and Products
-1. Administrator logs in to the Admin Panel
-2. Administrator creates, edits, or deactivates user accounts
-3. Administrator creates or updates insurance products and coverage tiers
-4. Administrator reviews audit logs and generates operational reports
+### Workflow 5: Trigger Campaign Immediately (Run Now)
+1. User types "run my reward campaign now"
+2. Intent parsed as `RUN_CAMPAIGN`; agent `campaign-run-now` executes
+3. UI POSTs `/api/campaigns/{campaignId}/run?clientId=...`
+4. API calls `runCampaign()` directly — bypasses scheduler, ignores next run time
+5. Cannot run campaigns with status `paused` or `stopped` — returns error
+6. Run results (stats, duration, status) returned immediately
 
----
+### Workflow 6: Manage Merchant Clients
+1. Admin POSTs `/api/clients` with merchant name + full config (Shopify credentials, WhatsApp token, Email auth, discount codes, campaign defaults)
+2. API generates UUID `clientId`, encrypts sensitive fields (Shopify access token, WhatsApp token, Email auth key) with AES-256, stores in MongoDB `clients` collection
+3. All subsequent campaign runs reference this `clientId` — config is loaded from DB at runtime, never from environment variables in multi-tenant mode
+4. Admin can update config, list clients (summary only, credentials redacted), or soft-delete (deactivate)
 
-## Product Terminology
-
-| Term | Definition |
-|------|------------|
-| **Policy** | A health insurance contract between the insurer and the insured customer |
-| **Premium** | The amount paid by the customer to maintain the insurance policy |
-| **Sum Insured** | The maximum amount the insurer will pay for covered claims under a policy |
-| **Claim** | A formal request by the insured to the insurer for payment of a covered medical expense |
-| **Proposal Form** | The application form filled by the customer when purchasing a new policy |
-| **Underwriting** | The process of evaluating a policy application for risk assessment before approval |
-| **Renewal** | The process of extending an existing policy for another term by paying the renewal premium |
-| **Waiting Period** | A defined period after policy start during which certain claims are not covered |
-| **Deductible** | The fixed amount the customer must pay before the insurer covers the remaining claim |
-| **Co-payment** | The percentage of the claim amount the customer must pay even after the deductible |
-| **Coverage Tier** | Plan level (e.g., Basic, Silver, Gold, Platinum) defining the scope and limit of coverage |
-| **Claims Handler** | An insurer staff member responsible for reviewing and settling claims |
-| **Agent** | A licensed intermediary who sells and manages policies on behalf of customers |
-| **Endorsement** | A change or addition to an existing policy (e.g., adding a dependent, changing coverage) |
-| **Grace Period** | A short period after the premium due date during which the policy remains active |
-| **Lapse** | When a policy becomes inactive due to non-payment beyond the grace period |
-| **Pre-authorization** | Approval required from the insurer before a planned medical procedure is covered |
-| **Portability** | The ability to transfer a policy from one insurer to another while retaining benefits |
+### Workflow 7: WhatsApp Webhook Delivery Status
+1. Meta sends delivery status callback to `/api/webhooks/whatsapp`
+2. Webhook verifies hub challenge or processes status update
+3. Delivery status (`delivered`, `read`, `failed`) logged against original send record
+4. Failed deliveries noted but do not re-trigger outreach (that is governed by attempt counters)
 
 ---
 
-## Technical Stack
+## Tech Stack
 
-- **Frontend:** React (Web), responsive design for tablet/mobile browser
-- **Backend:** Node.js / Express REST API
-- **Database:** PostgreSQL
-- **Auth:** JWT (access tokens) + OAuth2 (social login), MFA via OTP
-- **File Storage:** Cloud blob storage (e.g., AWS S3) for documents
-- **Notifications:** Email (SMTP) + in-portal notification centre
-- **Payment Gateway:** Third-party payment provider integration (tokenized card payments)
+- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui (Radix UI primitives), React Router v6, TanStack Query v5, Zod, Recharts
+- **Backend:** Azure Functions v4 (Node.js / TypeScript), compiled TypeScript (CommonJS, ES6 target)
+- **Database:** MongoDB Atlas (via Cosmos DB API) — collections: clients, campaign_schedules, campaign_customers, whatsapp_conversion_tracking, bandit_events, bandit_run_summaries, run_logs, and pipeline-specific decision collections
+- **Blob Storage:** Azure Blob Storage — per-client bandit state JSON, decision logs, WhatsApp delivery reports, HTML run reports
+- **Auth:** Keycloak (OIDC/JWT) — `@react-keycloak/web` on frontend, `jose` + remote JWKS verification on backend
+- **AI / ML:** Custom logistic regression (gradient descent, in-process TypeScript), UCB1 + ε-greedy multi-armed bandits (in-process, state persisted to Blob), Azure OpenAI (GPT-4o) for chat intent parsing and conversational responses
+- **Messaging — WhatsApp:** Meta Cloud API (WhatsApp Business), approved message templates, rate-limited 1 msg/s
+- **Messaging — Email:** MSG91 transactional email API
+- **Shopify Integration:** Shopify Admin REST API (paginated customers + orders, Retry-After rate limit handling)
+- **CI/CD:** Azure Pipelines (`azure-pipelines.yml`), deployed to Azure Function App `shopify-rfm`
+- **Testing:** Vitest (70 tests — regression, evaluation, skill-routing); Playwright (E2E, configured but not fully built out)
+- **Package Management:** npm (API), bun / pnpm (UI)
