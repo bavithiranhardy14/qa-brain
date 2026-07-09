@@ -1,11 +1,11 @@
 # Product Context
 
 ## Application Overview
-**Application Name:** RewardRally
-**Type:** AI-Powered Shopify Marketing Automation — REST API (Azure Functions) + React Web App
-**Primary Users:** Shopify store administrators and marketers
+**Application Name:** EduTrack LMS
+**Type:** Cloud-Based Learning Management System — REST API (Node.js / Express) + React Web App
+**Primary Users:** Corporate trainers, employees, and system administrators
 
-RewardRally connects to Shopify stores and runs four independent AI pipelines that identify customers at risk of churning, personalize outreach based on behavioral signals, optimize loyalty rewards using cost-aware bandit algorithms, and nudge customers to replenish products on predicted purchase cycles. All pipelines communicate with customers via WhatsApp or Email and learn from real conversion outcomes.
+EduTrack LMS enables organizations to create, assign, and track online training courses for their workforce. Learners complete self-paced modules with quizzes and assignments. Managers track team progress and compliance. The platform supports video content, PDF resources, interactive assessments, automated certification issuance, and integrates with HR systems for user provisioning.
 
 ---
 
@@ -13,91 +13,88 @@ RewardRally connects to Shopify stores and runs four independent AI pipelines th
 
 | Module | Description | Primary Roles |
 |--------|-------------|---------------|
-| Churn Prediction Pipeline | Fetches Shopify data, scores customers via RFM + logistic regression, filters by CLV, then selects outreach actions (discount/reminder/win-back/no-action) via UCB bandit | Store Admin |
-| Hyper-Personalization Pipeline | Builds behavioral feature profiles from Cosmos DB browse/cart signals, classifies customer intent (exploring/hesitating/ready/dropping), routes targeted WhatsApp nudges via MAB | Store Admin |
-| Reward Optimization Pipeline | Computes necessity score (0–1) per customer, gates eligible reward tiers by band, selects cost-aware reward (no_reward / points_reward / discount_10 / discount_20) via UCB bandit | Store Admin |
-| Lifecycle Replenishment Pipeline | Estimates per-customer replenishment cycle from order gaps, classifies state (not_due / nearing / overdue), selects nudge action (no_action / reminder / suggest_next / bundle_offer) via UCB bandit | Store Admin |
-| Campaign Scheduler | HTTP CRUD for scheduling pipeline runs on cron; distributed lease prevents double-execution across Azure Function instances | Store Admin |
-| Campaign Runner | Timer-triggered (every 60s) — queries due campaigns, acquires distributed lease, routes to correct pipeline via SkillRegistry | System (internal) |
-| Campaign Reporting & Status | Aggregates per-campaign analytics: delivery rates, conversion rates, bandit learning state, run history | Store Admin |
-| Chat / AI Assistant | Azure OpenAI-backed conversational interface — parses natural-language intent (29 intent types), routes to the correct agent or falls through to general chat | Store Admin |
-| Multi-Tenant Client Management | CRUD for merchant accounts; encrypts Shopify/WhatsApp/Email credentials at rest; all pipelines isolated per clientId | System Admin |
-| Conversion Tracking | Records WhatsApp/Email sends, resolves purchase outcomes from Shopify orders, feeds real rewards back to UCB bandits at next run | System (internal) |
-| Outreach Dispatch | Routes pipeline decisions to WhatsApp (Meta Cloud API) or Email (MSG91) based on campaign channel setting | System (internal) |
-| Authentication | Keycloak JWT validation on all HTTP endpoints; dev mode falls back to `sub: 'dev'` when Keycloak not configured | System (internal) |
+| Course Library | Create and manage courses with modules, video lessons, PDFs, and SCORM packages | Admin, Instructor |
+| Enrollment Engine | Assign courses to individual learners or groups; supports self-enrollment and mandatory enrollment | Admin, Manager |
+| Assessment Module | Build quizzes and tests with multiple-choice, true/false, and short-answer questions; configurable pass thresholds | Admin, Instructor |
+| Progress Tracker | Tracks lesson completion percentage, time-on-task, quiz attempts, and last access per learner per course | System (internal) |
+| Certification Engine | Generates PDF certificates upon course completion; validates against expiry dates for compliance-tracked courses | System (internal) |
+| Notification Service | Sends email reminders for overdue courses, upcoming deadlines, and certificate expiry; configurable per org | System (internal) |
+| Billing & Subscriptions | Manages org-level subscription plans (Starter / Pro / Enterprise), seat counts, and monthly invoice generation | Admin, Finance |
+| Admin Dashboard | Organization management, user provisioning, role assignment, SSO configuration, and audit logs | System Admin |
+| Reporting & Analytics | Generates completion reports, compliance dashboards, learner performance summaries, and exportable CSV/PDF reports | Admin, Manager |
+| User Management | CRUD for learner accounts; supports local auth, SSO (SAML 2.0), and SCIM provisioning from HR systems | System Admin |
+| Integration Hub | Webhooks and REST connectors for HR systems (Workday, BambooHR), video platforms (Vimeo, YouTube), and HRIS sync | Admin |
 
 ---
 
 ## User Workflows
 
-### Workflow 1: Schedule a Churn Recovery Campaign
-1. User opens React chat UI (authenticated via Keycloak)
-2. User types a natural-language command (e.g., "create a churn campaign for my store")
-3. UI pre-classifier checks for slash commands or keyword matches; on miss, LLM parses intent
-4. Intent resolved to `RUN_CHURN_ANALYSIS` with confidence ≥ 0.70
-5. UI renders `AgentInputCard` — user fills: name, cron schedule, dryRun flag, maxAttempts, minGapDays, churnWindowDays
-6. UI POSTs `/api/campaigns/schedule` with `parameters.pipelineType = 'churn'` and `clientId`
-7. API creates `CampaignSchedule` document in MongoDB with computed `nextRunAt`
-8. Campaign runner timer (every 60s) picks up the campaign when `nextRunAt <= now`
-9. Runner acquires distributed MongoDB lease and calls `SkillRegistry.get('churn').execute(ctx)`
-10. Churn pipeline: fetches Shopify customers + orders → RFM scores → churn prediction → CLV filter → UCB bandit selects action per customer → WhatsApp messages sent → attempt counters incremented → run log persisted
+### Workflow 1: Enroll a Learner in a Course
+1. Manager logs in via SSO or email/password
+2. Manager navigates to **Enrollment** and selects a course from the Course Library
+3. Manager selects individual learners or a team group
+4. Manager sets enrollment type: **Voluntary** or **Mandatory**, and optionally sets a due date
+5. System creates enrollment records and sends email notification to each learner
+6. Learners appear in the course roster with status `not_started`
 
-### Workflow 2: Outcome Resolution and Bandit Learning
-1. Customer receives WhatsApp message; `whatsapp_conversion_tracking` record written (outcome_pending: true)
-2. At the START of the next pipeline run, the system fetches fresh Shopify orders
-3. For each pending tracking record: if customer placed an order AFTER message send time → `converted: true`, `real_reward: 1`; else `converted: false`, `real_reward: 0`
-4. Converted customers receive `suppressed: true` flag; suppressed customers are excluded from future outreach
-5. Real rewards (0 or 1) are fed into the UCB bandit state (Azure Blob) — bandit updates arm averages
-6. On next run, bandit selects actions informed by real conversion data
+### Workflow 2: Complete a Course and Earn a Certificate
+1. Learner logs in and opens assigned course from their dashboard
+2. Learner completes lessons sequentially (or in any order if `enforceOrder = false`)
+3. After each lesson, progress percentage is updated in real time
+4. Upon completing the final lesson, learner is prompted to take the final assessment
+5. If assessment score ≥ `passMark` (default 70%), course status set to `completed`
+6. Certification Engine generates a dated PDF certificate and emails it to the learner
+7. Completion event triggers webhook to HR system if configured
 
-### Workflow 3: Monitor Campaign Analytics
-1. User asks "show analytics for my churn campaign" in chat
-2. Intent parsed as `GET_CAMPAIGN_ANALYTICS`; agent `campaign-analytics` executes
-3. UI calls `/api/campaigns/{campaignId}/status?clientId=...`
-4. API aggregates: customer breakdown by churn risk / intent state / necessity band, action distribution, conversion rate, delivery success rate, bandit arm rewards, last 5 run summaries
-5. UI renders `AgentResponseCard` with structured analytics data
+### Workflow 3: Manager Views Team Compliance Report
+1. Manager opens **Reporting & Analytics** and selects **Compliance Dashboard**
+2. Selects a compliance-tagged course and a team group
+3. System aggregates: completed / in-progress / not-started / overdue counts per learner
+4. Manager exports report as PDF or CSV for audit purposes
 
-### Workflow 4: Pause, Resume, or Stop a Campaign
-1. User types "pause my churn campaign" in chat
-2. Intent parsed as `PAUSE_CAMPAIGN`; agent `campaign-pause` executes
-3. If campaign name is ambiguous, UI asks clarification (fuzzy match score threshold: 0.4)
-4. User confirms campaign; UI sends PATCH `/api/campaigns/{campaignId}` with `status: 'paused'`
-5. Campaign runner skips paused campaigns on next timer fire
-6. User can resume via "resume campaign" → status set to `active`, `nextRunAt` recalculated from current time
+### Workflow 4: Admin Configures a New Course
+1. Admin opens **Course Library** and clicks **Create Course**
+2. Admin adds course details: title, category, tags, thumbnail, description, estimated duration
+3. Admin uploads or links content: video lessons (Vimeo/YouTube), PDFs, SCORM packages
+4. Admin creates assessment: adds questions, sets `passMark`, sets `maxAttempts` (default 3), sets `attemptCooldownHours` (default 24)
+5. Admin sets course visibility: **Draft**, **Published**, or **Archived**
+6. Admin optionally enables certificate issuance and sets `certificateValidityMonths`
 
-### Workflow 5: Trigger Campaign Immediately (Run Now)
-1. User types "run my reward campaign now"
-2. Intent parsed as `RUN_CAMPAIGN`; agent `campaign-run-now` executes
-3. UI POSTs `/api/campaigns/{campaignId}/run?clientId=...`
-4. API calls `runCampaign()` directly — bypasses scheduler, ignores next run time
-5. Cannot run campaigns with status `paused` or `stopped` — returns error
-6. Run results (stats, duration, status) returned immediately
+### Workflow 5: Notification for Overdue Course
+1. Notification Service runs daily at 07:00 UTC
+2. Queries all enrollments where `dueDate < today` AND `status != completed`
+3. For each overdue enrollment: sends email reminder to learner and CC to their manager
+4. Learner's enrollment status updated to `overdue`
+5. Escalation email sent to admin if overdue by more than `escalationThresholdDays` (default: 14 days)
 
-### Workflow 6: Manage Merchant Clients
-1. Admin POSTs `/api/clients` with merchant name + full config (Shopify credentials, WhatsApp token, Email auth, discount codes, campaign defaults)
-2. API generates UUID `clientId`, encrypts sensitive fields (Shopify access token, WhatsApp token, Email auth key) with AES-256, stores in MongoDB `clients` collection
-3. All subsequent campaign runs reference this `clientId` — config is loaded from DB at runtime, never from environment variables in multi-tenant mode
-4. Admin can update config, list clients (summary only, credentials redacted), or soft-delete (deactivate)
+### Workflow 6: Certificate Expiry and Re-Enrollment
+1. Certification Engine runs a nightly job checking all issued certificates
+2. Certificates within `expiryWarningDays` (default: 30 days) of expiry trigger a reminder email
+3. Expired certificates set learner's course status back to `not_started`
+4. If `autoReEnroll = true` on the course, learner is automatically re-enrolled
+5. Previous certificate is marked `expired` in the learner's certification history
 
-### Workflow 7: WhatsApp Webhook Delivery Status
-1. Meta sends delivery status callback to `/api/webhooks/whatsapp`
-2. Webhook verifies hub challenge or processes status update
-3. Delivery status (`delivered`, `read`, `failed`) logged against original send record
-4. Failed deliveries noted but do not re-trigger outreach (that is governed by attempt counters)
+### Workflow 7: Billing — Monthly Invoice Generation
+1. On the 1st of each month, Billing module calculates usage: active seats, overage seats
+2. Invoice generated with line items: base plan fee + overage charges
+3. Invoice emailed to org billing contact and stored in admin dashboard
+4. If payment fails (card decline / expired), org account moves to `payment_overdue` state after 3 retries
+5. After 7 days in `payment_overdue`, learner access suspended; admin notified
 
 ---
 
 ## Tech Stack
 
-- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, shadcn/ui (Radix UI primitives), React Router v6, TanStack Query v5, Zod, Recharts
-- **Backend:** Azure Functions v4 (Node.js / TypeScript), compiled TypeScript (CommonJS, ES6 target)
-- **Database:** MongoDB Atlas (via Cosmos DB API) — collections: clients, campaign_schedules, campaign_customers, whatsapp_conversion_tracking, bandit_events, bandit_run_summaries, run_logs, and pipeline-specific decision collections
-- **Blob Storage:** Azure Blob Storage — per-client bandit state JSON, decision logs, WhatsApp delivery reports, HTML run reports
-- **Auth:** Keycloak (OIDC/JWT) — `@react-keycloak/web` on frontend, `jose` + remote JWKS verification on backend
-- **AI / ML:** Custom logistic regression (gradient descent, in-process TypeScript), UCB1 + ε-greedy multi-armed bandits (in-process, state persisted to Blob), Azure OpenAI (GPT-4o) for chat intent parsing and conversational responses
-- **Messaging — WhatsApp:** Meta Cloud API (WhatsApp Business), approved message templates, rate-limited 1 msg/s
-- **Messaging — Email:** MSG91 transactional email API
-- **Shopify Integration:** Shopify Admin REST API (paginated customers + orders, Retry-After rate limit handling)
-- **CI/CD:** Azure Pipelines (`azure-pipelines.yml`), deployed to Azure Function App `shopify-rfm`
-- **Testing:** Vitest (70 tests — regression, evaluation, skill-routing); Playwright (E2E, configured but not fully built out)
-- **Package Management:** npm (API), bun / pnpm (UI)
+- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, React Router v6, TanStack Query v5, Zod
+- **Backend:** Node.js 20, Express 5, TypeScript (ESM)
+- **Database:** PostgreSQL 15 (primary data store) + Redis 7 (session cache, job queues)
+- **File Storage:** AWS S3 — course content, certificate PDFs, SCORM packages
+- **Auth:** Local email/password + SAML 2.0 SSO; JWT access tokens (15 min) + refresh tokens (7 days)
+- **Background Jobs:** BullMQ (Redis-backed) — notification dispatch, certificate generation, report exports
+- **Email:** SendGrid transactional email API
+- **Video:** Vimeo API and YouTube Data API v3 for embedded lesson videos
+- **HR Integrations:** REST webhooks + SCIM 2.0 for Workday and BambooHR user sync
+- **Reporting:** Server-side PDF generation via Puppeteer; CSV via json2csv
+- **CI/CD:** GitHub Actions — lint, test, build, deploy to AWS ECS
+- **Testing:** Jest + React Testing Library (unit/integration); Playwright (E2E)
+- **Package Management:** npm
