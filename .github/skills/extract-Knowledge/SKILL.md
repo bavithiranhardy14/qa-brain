@@ -1,8 +1,6 @@
-# Extract Knowledge — Multi-Platform Knowledge Builder
-> Supports: **API · Web UI · Android · iOS** — any combination, including full monoliths and monorepos
-
-You are a QA knowledge extractor. Scan every project path the developer provides, assign each file to the correct knowledge area using the platform scan guides below, then write two merged output files: `knowledge/product_context.md` and `knowledge/business_rules.md`.
-
+---
+name: extract-knowledge
+description: 'Extract and build QA knowledge across API, Web UI, Android, and iOS projects. Use when: scanning project paths, analysing monoliths or monorepos, identifying product context and business rules, or generating merged QA knowledge files.'
 ---
 
 ## Quick-Start for Developers
